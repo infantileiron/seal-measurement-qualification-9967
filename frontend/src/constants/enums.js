@@ -1,1 +1,1 @@
-export const ROLES={admin:'工艺负责人',analyst:'工艺工程师',viewer:'只读观察员'};export const STATUS={queued:'待计算',running:'计算中',completed:'计算完成',failed:'计算失败'};
+export const ROLES={admin:'工艺负责人',analyst:'工艺工程师',viewer:'只读观察员'};export const STATUS={queued:'待计算',running:'计算中',completed:'计算完成',failed:'计算失败'};export const DEVICE_STATUS={unqualified:'未获资格',qualified:'资格有效',requalifying:'重测暂停'};export const DISPOSITION={normal:'正常',quarantined:'隔离留存',released:'已放行'};

@@ -1,0 +1,31 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-9.2.0, pluggy-1.7.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /workspace/backend
+plugins: anyio-4.16.0
+collecting ... collected 16 items
+
+tests/test_gauge_api.py::test_device_permissions_and_study_lifecycle PASSED [  6%]
+tests/test_gauge_api.py::test_quarantine_release_and_no_duplicate_release PASSED [ 12%]
+tests/test_gauge_api.py::test_publish_failure_keeps_hold_and_recovery_publishes PASSED [ 18%]
+tests/test_gauge_api.py::test_requalifying_samples_held_from_assessment_snapshot PASSED [ 25%]
+tests/test_gauge_api.py::test_existing_assessments_keep_basis_after_qualification_change PASSED [ 31%]
+tests/test_gauge_api.py::test_reading_matrix_validation PASSED           [ 37%]
+tests/test_gauge_api.py::test_sample_enters_assessment_only_after_release PASSED [ 43%]
+tests/test_gauge_api.py::test_worker_resume_interrupted_study PASSED     [ 50%]
+tests/test_grr_stats.py::test_balanced_closed_form_and_negative_component PASSED [ 56%]
+tests/test_grr_stats.py::test_missing_readings_kept_as_null_and_type_iii PASSED [ 62%]
+tests/test_grr_stats.py::test_empty_cell_is_rejected_not_imputed PASSED  [ 68%]
+tests/test_grr_stats.py::test_interaction_effect_isolated PASSED         [ 75%]
+tests/test_grr_stats.py::test_threshold_qualification_and_missing_limit PASSED [ 81%]
+tests/test_grr_stats.py::test_threshold_validation PASSED                [ 87%]
+tests/test_grr_stats.py::test_balanced_and_type_iii_engines_agree_on_complete_design PASSED [ 93%]
+tests/test_grr_stats.py::test_repeatability_zero_variance_fails PASSED   [100%]
+
+=============================== warnings summary ===============================
+../../home/node/.local/lib/python3.11/site-packages/starlette/testclient.py:40
+  /home/node/.local/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 16 passed, 1 warning in 1.62s =========================

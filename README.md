@@ -11,9 +11,10 @@
 ## 业务模块
 
 1. **方案库**：维护方案编号、封口温度、保压时间、压力、材料说明；支持修订。
-2. **拉力录入**：按方案与材料批次登记最大拉力，支持筛选、异常标记与修订；标记样本保留在统计中。
-3. **方差分析**：选择至少两个方案与材料批次，后台 worker 计算 SS、F、p、η²；每次提交冻结参数和测量快照。
+2. **拉力录入**：按方案与材料批次登记最大拉力，支持筛选、异常标记与修订；标记样本保留在统计中。样本可关联量测设备，按设备资格状态自动隔离或放行。
+3. **方差分析**：选择至少两个方案与材料批次，后台 worker 计算 SS、F、p、η²；每次提交冻结参数和测量快照；隔离留存样本不进入快照。
 4. **工艺评议**：查看组别均值/标准差，填写推荐方案和至少20字业务理由，负责人签核后冻结，下载 JSON，负责人可查看操作审计。
+5. **设备量测资格**：登记拉力设备，按标准件 × 操作员 × 重复次数建 Gauge R&R 试验并录数（缺测以空值登记），分解重复性、再现性与标准件×操作员交互变异，按可配阈值判资格；负责人发布资格与隔离样本放行在同一事务内生效。
 
 ### 角色与账号
 
@@ -21,7 +22,7 @@
 |---|---|---|
 | admin / 工艺负责人 | admin@demo.local | 所有业务编辑、计算、推荐、签核冻结、审计 |
 | analyst / 工艺工程师 | analyst@demo.local | 方案与样本新增/修订、提交计算、起草推荐；不能签核 |
-| viewer / 只读观察员 | viewer@demo.local | 查看四模块、下载已完成结果；不能编辑或提交任务 |
+| viewer / 只读观察员 | viewer@demo.local | 查看五模块、下载已完成结果；不能编辑或提交任务 |
 
 三个演示账号密码均为 `Demo123!`。权限由后端 JWT 与数据库角色共同校验；前端同步隐藏写入入口。
 
@@ -77,9 +78,20 @@ Docker 默认网络池不足时使用独立可配置子网，默认 `10.253.105.
 
 假设为独立样本、组内近似正态和方差齐性；本版不执行正态/方差齐性自动检验或事后多重比较，因此整体显著不说明具体哪两组不同。推荐需人工考虑产品下限、外观、热损伤与能耗，并安排验证。只有本次比较中的工艺可被推荐。签核需先有完整推荐；签核后评议不可覆盖，新建任务留痕。
 
+## 设备量测资格（Gauge R&R）口径
+
+拉力设备自身的测量波动会被误当作工艺差异，因此在 ANOVA 之外增加交叉型量测系统分析（MSA）双因素有重复设计：`a` 个标准件、`b` 名操作员、每人每件重复 `r` 次，要求三者均 ≥2。读数矩阵按「标准件 × 操作员 × 重复次数」逐格登记。
+
+- **缺测处理**：缺测单元格以 `null` 显式登记（不插补、不删格、不写零）；完整平衡走教科书闭式解，平方和可加且守恒；存在缺测走总和为零（effects）编码的 OLS Type III 偏平方和（效应空间在平衡时正交，缺测时仍给出 Type III 可估计函数，避免参考组哑变量编码与交互列非正交的偏差），方差分量除数改用单元格调和均值（Searle 不平衡口径），两类引擎在完整数据上逐项一致（有回归测试锁定）。某标准件×操作员整格为空时秩不足，明确拒绝并要求补测。
+- **方差分量**：以交互均方为标准件/操作员 F 的分母、重复均方为交互 F 的分母；分母均方为零时 F/p 记 `null` 而非无穷。重复性=设备内重复变异，再现性=操作员间变异，交互=标准件×操作员交叉变异，零件间为真实标准件差异（不计入量测误差）。
+- **负分量**：ANOVA 估计可能出现负方差分量，原始负值如实保留在结果中；按 AIAG MSA 在汇总 GR&R 与总变异时于零处截断，负分量只作处理说明（`handling_notes`），本身不判资格失败。
+- **可配阈值**：建试验时可覆盖 `%GRR 研究变异占比上限`（默认 10%）、`NDC 可区分类别数下限`（默认 5，1.41·零件SD/GRR-SD）、`缺测比例上限`（默认 10%）；三项全过才 `qualified`，失败原因逐条列出。
+- **资格状态机与样本处置**：设备状态为 `unqualified / qualified / requalifying`。建试验即置「重测暂停」：关联设备的新样本照常收库，但 `quarantined` 隔离留存、暂缓入评议；无设备历史样本保持 `normal`。负责人发布时，资格状态切换与隔离样本放行在**同一数据库事务**提交，任一失败整体不生效；不达标发布只留痕，样本继续隔离。`release_ledger` 唯一约束保证重试发布不重复放行；恢复路径是新建重测试验达标后再发布。
+- **并发取样**：发起评议快照时先对相关设备行加行锁（`SELECT … FOR UPDATE`），在同一资格状态视图内取样，隔离样本排除并在快照 `held_out` 留痕；评议一旦创建其快照即冻结，后续资格切换不改变已有评议依据。
+
 ## Seed 与一天的工作剧本
 
-随机种子 `3105`。自然键为用户邮箱、工艺编号、样本编号、评议标题；已有对象不覆盖，重复 seed 不增行、不覆盖用户修改。初始3账号、3方案、105样本、1个待执行评议（worker 真实计算）。
+随机种子 `3105`（量测试验数据另用 `7702`）。自然键为用户邮箱、工艺编号、样本编号、评议标题、设备编号、试验编号；已有对象不覆盖，重复 seed 不增行、不覆盖用户修改。初始3账号、3方案、2台量测设备、107样本（含2条隔离样本）、2个量测资格试验（1个已发布达标、1个含2格缺测不达标）、1个待执行评议（worker 真实计算）。
 
 | 方案 | 温度 ℃ | 保压 s | 压力 MPa | 样本 |
 |---|---:|---:|---:|---:|
@@ -104,12 +116,13 @@ frontend/src/  api / stores / types / components/common / hooks / pages / router
 backend/src/   routes / controllers / services / models / schemas / middlewares / utils / constants / config
 backend/scripts/seed_demo.py
 backend/migrations/001_initial.sql
+backend/tests/ test_grr_stats.py / test_gauge_api.py
 ```
 
-共享枚举为 ROLES 与 TASK_STATUS/STATUS：后端 `src/constants/enums.py`，认证判断在 `src/utils/security.py`，状态在 `src/services/assessments.py` 与 `src/worker.py`；前端 `src/constants/enums.js`、`src/components/common/status.js`、`src/app.js`。角色枚举 admin/analyst/viewer；任务状态 queued/running/completed/failed，另有 approved 布尔业务状态。
+共享枚举为 ROLES、TASK_STATUS/STATUS、DEVICE_STATUS、DISPOSITION：后端 `src/constants/enums.py`，认证判断在 `src/utils/security.py`，状态在 `src/services/assessments.py`、`src/services/gauge.py` 与 `src/worker.py`；前端 `src/constants/enums.js`、`src/components/common/status.js`、`src/app.js`。角色枚举 admin/analyst/viewer；任务状态 queued/running/completed/failed，另有 approved 布尔业务状态；设备状态 unqualified/qualified/requalifying，样本处置 normal/quarantined/released。
 
 ## 已知范围
 
-小型项目逐条登记，不含 Excel/CSV 批量导入、删除、分页、自动取样设备连接、事后多重比较或外部电子签名。评议是本地数据库签核。时间戳以 UTC 留痕。前端字体从 Google Fonts 加载，离线时使用指定 serif 回退；核心业务不依赖字体服务。测试脚本、截图与 TESTING.md 位于批次 `test-artifacts/gb-3105/`，源码目录不存放这些证据。
+小型项目逐条登记，不含 Excel/CSV 批量导入、删除、分页、自动取样设备连接、事后多重比较或外部电子签名。评议是本地数据库签核。时间戳以 UTC 留痕。前端字体从 Google Fonts 加载，离线时使用指定 serif 回退；核心业务不依赖字体服务。测试脚本、截图与 TESTING.md 位于批次 `test-artifacts/`（量测资格见 `test-artifacts/grr-7702/`），源码目录不存放这些证据。
 
 MIT License，见 LICENSE。
